@@ -7,8 +7,6 @@ build/
 *.class
 
 # Maven
-.mvn/timing.properties
-.mvn/wrapper/maven-wrapper.properties
 
 # IDE
 .idea/
