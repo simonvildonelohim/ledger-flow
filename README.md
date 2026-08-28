@@ -33,12 +33,12 @@ This section states only what a passing test in CI demonstrates. Nothing is desc
 
 ```mermaid
 flowchart LR
-    Client[Client] -->|POST /transactions<br/>Idempotency-Key| API[ledger-api]
-    API -->|single transaction| DB[(PostgreSQL<br/>ledger + outbox)]
-    DB -.->|polls unpublished| Relay[Outbox relay]
-    Relay -->|publishes| Kafka{{Kafka<br/>transactions.v1}}
-    Kafka -->|consumes| Notifier[ledger-notifier]
-    Notifier -->|updates status| DB
+    Client["Client"] -->|"POST transactions"| API["ledger-api"]
+    API -->|"single transaction"| DB[("PostgreSQL: ledger + outbox")]
+    DB -.->|"polls unpublished"| Relay["Outbox relay"]
+    Relay -->|"publishes"| Kafka{{"Kafka: transactions.v1"}}
+    Kafka -->|"consumes"| Notifier["ledger-notifier"]
+    Notifier -->|"updates status"| DB
 ```
 
 | Concern | Mechanism |
