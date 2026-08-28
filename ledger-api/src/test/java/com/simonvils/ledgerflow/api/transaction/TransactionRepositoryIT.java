@@ -1,14 +1,12 @@
 package com.simonvils.ledgerflow.api.transaction;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.simonvils.ledgerflow.api.AbstractPostgresIT;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.dao.DuplicateKeyException;
 
 /** Round-trip tests for {@link TransactionRepository} against a real PostgreSQL. */
 class TransactionRepositoryIT extends AbstractPostgresIT {
@@ -19,7 +17,7 @@ class TransactionRepositoryIT extends AbstractPostgresIT {
     void insertsAndReadsBackEveryField() {
         Transaction inserted = Transaction.accept(uniqueKey(), "acct-001", 125_00L, "CAD");
 
-        repository.insert(inserted);
+        assertThat(repository.insertIfAbsent(inserted)).isTrue();
         Optional<Transaction> found = repository.findById(inserted.id());
 
         assertThat(found).isPresent();
@@ -40,7 +38,7 @@ class TransactionRepositoryIT extends AbstractPostgresIT {
         long amount = 9_007_199_254_740_993L;
         Transaction inserted = Transaction.accept(uniqueKey(), "acct-002", amount, "USD");
 
-        repository.insert(inserted);
+        repository.insertIfAbsent(inserted);
 
         assertThat(repository.findById(inserted.id()).orElseThrow().amountMinor()).isEqualTo(amount);
     }
@@ -49,25 +47,44 @@ class TransactionRepositoryIT extends AbstractPostgresIT {
     void preservesNegativeAmountsForDebits() {
         Transaction inserted = Transaction.accept(uniqueKey(), "acct-003", -4_250L, "EUR");
 
-        repository.insert(inserted);
+        repository.insertIfAbsent(inserted);
 
         assertThat(repository.findById(inserted.id()).orElseThrow().amountMinor()).isEqualTo(-4_250L);
     }
 
     @Test
-    void rejectsASecondInsertWithTheSameIdempotencyKey() {
+    void doesNotWriteASecondRowForAKeyAlreadyPresent() {
         String key = uniqueKey();
-        repository.insert(Transaction.accept(key, "acct-004", 100L, "CAD"));
+        Transaction first = Transaction.accept(key, "acct-004", 100L, "CAD");
+        Transaction second = Transaction.accept(key, "acct-004", 999L, "CAD");
+        repository.insertIfAbsent(first);
 
-        // The database constraint is what enforces this, not application code.
-        // Issue #10 turns this exception into a 200 returning the original.
-        assertThatThrownBy(() -> repository.insert(Transaction.accept(key, "acct-004", 100L, "CAD")))
-                .isInstanceOf(DuplicateKeyException.class);
+        boolean written = repository.insertIfAbsent(second);
+
+        assertThat(written).isFalse();
+        // The second transaction carries a different id and amount, so finding the
+        // first proves nothing was overwritten either.
+        assertThat(repository.findByIdempotencyKey(key).orElseThrow().id()).isEqualTo(first.id());
+        assertThat(repository.findById(second.id())).isEmpty();
+    }
+
+    @Test
+    void findsATransactionByItsIdempotencyKey() {
+        String key = uniqueKey();
+        Transaction inserted = Transaction.accept(key, "acct-005", 7_500L, "CAD");
+        repository.insertIfAbsent(inserted);
+
+        assertThat(repository.findByIdempotencyKey(key).orElseThrow().id()).isEqualTo(inserted.id());
     }
 
     @Test
     void returnsEmptyForAnUnknownId() {
         assertThat(repository.findById(UUID.randomUUID())).isEmpty();
+    }
+
+    @Test
+    void returnsEmptyForAnUnknownIdempotencyKey() {
+        assertThat(repository.findByIdempotencyKey(uniqueKey())).isEmpty();
     }
 
     /** Tests share one container, so keys must not collide between them. */

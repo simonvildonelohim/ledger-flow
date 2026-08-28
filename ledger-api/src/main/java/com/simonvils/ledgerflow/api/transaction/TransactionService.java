@@ -1,6 +1,5 @@
 package com.simonvils.ledgerflow.api.transaction;
 
-import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,28 +14,43 @@ public class TransactionService {
     }
 
     /**
-     * Accepts a transaction and records it as {@link TransactionStatus#PENDING}.
+     * Accepts a transaction, or returns the one already recorded under this key.
      *
-     * <p>The idempotency key is currently generated here, which means every call
-     * creates a new transaction and a retried request is charged twice. That is
-     * the gap issue #10 closes, by taking the key from the {@code
-     * Idempotency-Key} header and returning the original transaction when the
-     * database rejects the duplicate.
+     * <p>The key comes from the client, which is what makes a retry safe: a caller
+     * that times out and resends gets its original transaction back instead of a
+     * second charge. Only the caller knows whether two requests represent the same
+     * intent, so only the caller can supply that identity.
      *
-     * <p>Annotated {@code @Transactional} ahead of that need: from M3 this method
-     * writes the ledger row and its outbox row, and those two writes only give
-     * the guarantee described in ADR-0002 if they share one transaction.
+     * <p>Note that a replay returns the stored transaction, not the one just built
+     * from the incoming payload. If a client reuses a key with a different amount,
+     * the first submission is what stands — the key identifies the operation, and
+     * honouring the second body would make the endpoint non-idempotent by another
+     * route.
+     *
+     * <p>{@code @Transactional} is not needed for a single insert, but from M3 this
+     * method also writes the outbox row, and the guarantee in ADR-0002 only holds
+     * if both writes commit together.
      */
     @Transactional
-    public Transaction accept(CreateTransactionRequest request) {
-        Transaction transaction =
+    public TransactionAcceptance accept(String idempotencyKey, CreateTransactionRequest request) {
+        Transaction candidate =
                 Transaction.accept(
-                        UUID.randomUUID().toString(),
-                        request.accountId(),
-                        request.amountMinor(),
-                        request.currency());
+                        idempotencyKey, request.accountId(), request.amountMinor(), request.currency());
 
-        repository.insert(transaction);
-        return transaction;
+        if (repository.insertIfAbsent(candidate)) {
+            return TransactionAcceptance.created(candidate);
+        }
+
+        return repository
+                .findByIdempotencyKey(idempotencyKey)
+                .map(TransactionAcceptance::replayed)
+                .orElseThrow(
+                        () ->
+                                new IllegalStateException(
+                                        "Insert was suppressed by the unique constraint on "
+                                                + "idempotency_key, but no row exists under that key. "
+                                                + "This should be unreachable under READ COMMITTED, where "
+                                                + "the conflicting transaction has committed by the time "
+                                                + "the insert returns."));
     }
 }
