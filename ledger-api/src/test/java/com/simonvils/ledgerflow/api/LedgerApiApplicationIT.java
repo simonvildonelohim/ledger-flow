@@ -1,21 +1,30 @@
 package com.simonvils.ledgerflow.api;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.simple.JdbcClient;
 
 /**
- * Boots the full Spring context against a real PostgreSQL and lets Flyway apply
- * the migrations. This is the test that proves the schema is valid SQL — the
- * unit tests cannot.
- *
- * <p>Needs a Docker daemon, so it runs under {@code ./mvnw verify} (failsafe)
- * rather than {@code ./mvnw test}, which keeps the local unit-test loop fast on
- * machines without Docker installed.
+ * Verifies that the context starts and that Flyway actually applied the
+ * migrations. Asserting on the tables matters: a context-load test alone passes
+ * even when no migration ever runs, which is exactly how a missing Flyway
+ * auto-configuration went unnoticed until a test first queried a table.
  */
 class LedgerApiApplicationIT extends AbstractPostgresIT {
 
+    @Autowired private JdbcClient jdbcClient;
+
     @Test
-    void contextLoadsAndMigrationsApply() {
-        // Intentionally empty: failing to start here means either the context is
-        // misconfigured or a migration does not apply cleanly to a fresh database.
+    void flywayCreatesTheLedgerAndOutboxTables() {
+        List<String> tables =
+                jdbcClient
+                        .sql("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'")
+                        .query(String.class)
+                        .list();
+
+        assertThat(tables).contains("transactions", "outbox_event");
     }
 }
