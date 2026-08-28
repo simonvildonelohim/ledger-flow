@@ -33,7 +33,7 @@
 
     <!-- Dependency versions. See docs/adr/0003-pin-testcontainers-1x.md for why
          Testcontainers is pinned below the current 2.0 major. -->
-    <spring-boot.version>4.1.0</spring-boot.version>
+    <spring-boot.version>4.1.1</spring-boot.version>
     <testcontainers.version>1.21.3</testcontainers.version>
 
     <!-- Plugin versions. Not managed transitively since this project does not
