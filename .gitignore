@@ -1,0 +1,40 @@
+# Build output
+target/
+build/
+*.jar
+!.mvn/wrapper/maven-wrapper.jar
+*.war
+*.class
+
+# Maven
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.properties
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.project
+.classpath
+*.code-workspace
+
+# OS
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+
+# Logs and local state
+*.log
+logs/
+/data/
+
+# Secrets and local configuration
+.env
+.env.local
+*.local.properties
+application-local.yml
