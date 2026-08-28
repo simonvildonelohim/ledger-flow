@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/transactions")
 public class TransactionController {
 
-    static final String IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
+    public static final String IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
 
     private final TransactionService service;
 

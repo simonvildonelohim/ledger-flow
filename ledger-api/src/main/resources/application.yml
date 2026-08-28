@@ -7,6 +7,11 @@ spring:
     password: ${DB_PASSWORD:ledgerflow}
   flyway:
     enabled: true
+  mvc:
+    problemdetails:
+      # Renders Spring's own exceptions as RFC 9457 application/problem+json,
+      # so a missing header and a rejected field share one response shape.
+      enabled: true
 
 management:
   endpoints:
