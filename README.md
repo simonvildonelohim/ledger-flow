@@ -1,6 +1,6 @@
 # ledger-flow
 
-**An event-driven transaction ledger built with Java 21, Spring Boot and Kafka — a working reference implementation of the transactional outbox pattern.**
+**An event-driven transaction ledger built with Java 21, Spring Boot and Kafka, a working reference implementation of the transactional outbox pattern.**
 
 ![Status](https://img.shields.io/badge/status-in%20development-orange)
 ![Java](https://img.shields.io/badge/Java-21-blue)
