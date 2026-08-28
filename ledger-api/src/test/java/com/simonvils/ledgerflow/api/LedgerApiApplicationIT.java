@@ -1,35 +1,30 @@
 package com.simonvils.ledgerflow.api;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.util.List;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.simple.JdbcClient;
 
 /**
- * Boots the full Spring context against a real, disposable PostgreSQL
- * container and lets Flyway apply the migration in {@code db/migration}.
- * This is the test that actually proves the schema is valid SQL — the unit
- * test above cannot.
- *
- * <p>Needs a Docker daemon. Runs only under {@code ./mvnw verify}
- * (via the failsafe plugin), never under plain {@code ./mvnw test} — so it
- * runs in GitHub Actions even on a machine that has no Docker installed
- * locally.
+ * Verifies that the context starts and that Flyway actually applied the
+ * migrations. Asserting on the tables matters: a context-load test alone passes
+ * even when no migration ever runs, which is exactly how a missing Flyway
+ * auto-configuration went unnoticed until a test first queried a table.
  */
-@Testcontainers
-@SpringBootTest
-class LedgerApiApplicationIT {
+class LedgerApiApplicationIT extends AbstractPostgresIT {
 
-    @Container
-    @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
+    @Autowired private JdbcClient jdbcClient;
 
     @Test
-    void contextLoadsAndMigrationApplies() {
-        // Intentionally empty: a failure to start here means either the
-        // context is misconfigured or V1__create_ledger_and_outbox.sql
-        // does not apply cleanly to a fresh database.
+    void flywayCreatesTheLedgerAndOutboxTables() {
+        List<String> tables =
+                jdbcClient
+                        .sql("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'")
+                        .query(String.class)
+                        .list();
+
+        assertThat(tables).contains("transactions", "outbox_event");
     }
 }
