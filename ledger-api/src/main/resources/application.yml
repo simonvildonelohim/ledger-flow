@@ -1,0 +1,21 @@
+spring:
+  application:
+    name: ledger-api
+  datasource:
+    url: jdbc:postgresql://localhost:5432/ledgerflow
+    username: ${DB_USERNAME:ledgerflow}
+    password: ${DB_PASSWORD:ledgerflow}
+  flyway:
+    enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
+  endpoint:
+    health:
+      show-details: when-authorized
+
+server:
+  port: 8080
