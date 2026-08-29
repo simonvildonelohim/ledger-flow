@@ -21,7 +21,7 @@ public abstract class AbstractKafkaIT extends AbstractPostgresIT {
 
     // KRaft mode, no ZooKeeper. The apache/kafka image runs KRaft by default,
     // which is what a current deployment looks like.
-    static final KafkaContainer KAFKA = new KafkaContainer("apache/kafka:3.8.0");
+    public static final KafkaContainer KAFKA = new KafkaContainer("apache/kafka:3.8.0");
 
     static {
         KAFKA.start();

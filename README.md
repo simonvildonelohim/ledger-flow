@@ -27,7 +27,7 @@ This table states only what a passing test in CI demonstrates. Nothing is descri
 | Ledger write and event emission are atomic | `OutboxAtomicityIT` | Passing in CI |
 | Duplicate intake is rejected | `IdempotencyKeyIT` | Passing in CI |
 | Redelivered events leave balances unchanged | `NotifierDeduplicationIT` | Not yet implemented |
-| Events survive a broker outage | `BrokerOutageIT` | Not yet implemented |
+| Events survive a broker outage | `BrokerOutageIT` | Passing in CI |
 
 ## Architecture
 
