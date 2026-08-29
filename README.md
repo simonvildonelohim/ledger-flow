@@ -1,8 +1,8 @@
 # ledger-flow
 
-**An event-driven transaction ledger built with Java 21, Spring Boot and Kafka, a working reference implementation of the transactional outbox pattern.**
+**An event-driven transaction ledger built with Java 21, Spring Boot and Kafka — a working reference implementation of the transactional outbox pattern.**
 
-![Status](https://img.shields.io/badge/status-in%20development-orange)
+[![CI](https://github.com/simonvildonelohim/ledger-flow/actions/workflows/ci.yml/badge.svg)](https://github.com/simonvildonelohim/ledger-flow/actions/workflows/ci.yml)
 ![Java](https://img.shields.io/badge/Java-21-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
@@ -12,22 +12,22 @@
 
 Any service that writes to a database and publishes to a message broker carries a bug waiting to happen: the two operations cannot commit together, so a crash between them either loses the event or invents one. In a payment system that means a transaction recorded but never settled, or a customer charged twice — failures that are silent, discovered days later, and expensive to reconcile.
 
-`ledger-flow` implements the standard industry answer to that problem end to end: a transactional outbox, idempotent intake keyed on a client-supplied header, and consumers that deduplicate rather than assume delivery happens exactly once. Every guarantee is exercised by tests that inject the failure instead of hoping it never occurs — broker unreachable, duplicate delivery, crash between commit and publication.
+`ledger-flow` implements the standard industry answer to that problem end to end: a transactional outbox, idempotent intake keyed on a client-supplied header, and consumers that deduplicate rather than assume delivery happens exactly once. Every guarantee is exercised by tests that inject the failure instead of hoping it never occurs — a write that fails mid-transaction, the same key submitted eight times at once, a broker that is not there.
 
 It is built to be lifted. Clone it and run it as a service, or take the outbox and idempotency modules into an existing codebase. The reasoning behind each decision is recorded in [`docs/adr/`](docs/adr/), so the *why* travels with the code.
 
 ## Status
 
-**Current milestone: M1 — Foundations.** See the [roadmap](#roadmap) for what is built and what is not.
+**Current milestone: M3 — Outbox.** See the [roadmap](#roadmap) for what is built and what is not.
 
-This section states only what a passing test in CI demonstrates. Nothing is described as working before that is true — a README that overstates is worse than no README, because the first person to run the project finds out.
+This table states only what a passing test in CI demonstrates. Nothing is described as working before that is true — a README that overstates is worse than no README, because the first person to run the project finds out.
 
 | Guarantee | Backed by | Status |
 | --- | --- | --- |
-| Ledger write and event emission are atomic | `OutboxIntegrationTest` | Not yet implemented |
+| Ledger write and event emission are atomic | `OutboxAtomicityIT` | Passing in CI |
 | Duplicate intake is rejected | `IdempotencyKeyIT` | Passing in CI |
-| Redelivered events leave balances unchanged | `NotifierDeduplicationTest` | Not yet implemented |
-| Events survive a broker outage | `BrokerOutageTest` | Not yet implemented |
+| Redelivered events leave balances unchanged | `NotifierDeduplicationIT` | Not yet implemented |
+| Events survive a broker outage | `BrokerOutageIT` | Not yet implemented |
 
 ## Architecture
 
@@ -48,32 +48,65 @@ flowchart LR
 | Safe redelivery | Consumers deduplicate on event ID; effects are idempotent |
 | Ordering per account | Kafka partitioning by account ID |
 
+## API
+
+One endpoint so far.
+
+```
+POST /transactions
+Idempotency-Key: <client-supplied key>       required
+
+{"accountId": "acct-001", "amountMinor": 12500, "currency": "CAD"}
+```
+
+| Response | Meaning |
+| --- | --- |
+| `201 Created` | The transaction was written and an event is queued for publication |
+| `200 OK` | This key was already used; the original transaction is returned unchanged |
+| `400 Bad Request` | The header is missing, or a field failed validation |
+| `409 Conflict` | The request conflicts with existing data |
+
+Errors follow [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) and name the rejected fields:
+
+```json
+{
+  "type": "https://github.com/simonvildonelohim/ledger-flow/problems/validation-failed",
+  "title": "Invalid request",
+  "status": 400,
+  "detail": "One or more fields are invalid.",
+  "errors": { "currency": "must be a valid ISO-4217 currency code" }
+}
+```
+
+Amounts are integers in minor units — cents, not dollars. Binary floating point cannot represent most decimal fractions exactly, and the error is unbounded across a ledger.
+
 ## Tech stack
 
 | Layer | Choice | Licence |
 | --- | --- | --- |
 | Language | Java 21 (Temurin) | GPLv2 + Classpath Exception |
-| Framework | Spring Boot 3 | Apache-2.0 |
+| Framework | Spring Boot 4 | Apache-2.0 |
 | Broker | Apache Kafka (KRaft mode) | Apache-2.0 |
 | Database | PostgreSQL 16 | PostgreSQL Licence |
 | Migrations | Flyway | Apache-2.0 |
 | Testing | JUnit 5, Testcontainers, AssertJ | EPL-2.0 / MIT |
-| Quality gates | Spotless, Error Prone, JaCoCo | Apache-2.0 / MIT |
 | CI | GitHub Actions | — |
 
 Every dependency is open source. The project runs on a laptop with no cloud account and no paid service.
 
 ## Getting started
 
-> Prerequisites: JDK 21, PostgreSQL 16, and Kafka reachable on `localhost:9092`.
+> Prerequisites: JDK 21 and PostgreSQL 16.
 
 ```bash
-git clone https://github.com/<user>/ledger-flow.git
+git clone https://github.com/simonvildonelohim/ledger-flow.git
 cd ledger-flow
-./mvnw verify
+./mvnw test
 ```
 
-Detailed setup lives in [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md). The API contract is published as OpenAPI at `/swagger-ui.html` once the service is running.
+`./mvnw test` runs the unit tests and needs nothing but a JDK. `./mvnw verify` also runs the integration tests, which start real PostgreSQL containers through Testcontainers and therefore need a Docker daemon. Both run on every push; the integration suite is what proves the guarantees in the table above.
+
+Detailed setup lives in [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
 
 ## Before you run this in production
 
@@ -88,10 +121,10 @@ This is a reference implementation, and it is honest about where it stops. Anyon
 
 ## Roadmap
 
-Tracked in [Issues](../../issues), grouped into [milestones](../../milestones).
+Tracked in [Issues](../../issues).
 
-- [ ] **M1 — Foundations.** Project skeleton, database schema, CI pipeline green.
-- [ ] **M2 — Intake.** `POST /transactions` with idempotency-key handling and validation.
+- [x] **M1 — Foundations.** Project skeleton, database schema, CI pipeline green.
+- [x] **M2 — Intake.** `POST /transactions` with idempotency-key handling and validation.
 - [ ] **M3 — Outbox.** Atomic ledger and outbox write, polling relay, publication to Kafka.
 - [ ] **M4 — Consumer.** `ledger-notifier` with deduplication and status projection.
 - [ ] **M5 — Proof.** Failure-injection tests: broker down, duplicate delivery, crash mid-publish.
@@ -99,7 +132,11 @@ Tracked in [Issues](../../issues), grouped into [milestones](../../milestones).
 
 ## Architecture decision records
 
-Significant decisions are documented rather than remembered. See [`docs/adr/`](docs/adr/).
+Significant decisions are documented rather than remembered.
+
+- [ADR-0001](docs/adr/0001-record-architecture-decisions.md) — Record architecture decisions
+- [ADR-0002](docs/adr/0002-transactional-outbox-for-event-publication.md) — Use a transactional outbox for event publication
+- [ADR-0003](docs/adr/0003-pin-testcontainers-1x.md) — Pin Testcontainers to the 1.x line
 
 ## Licence
 
