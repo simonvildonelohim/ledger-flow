@@ -38,6 +38,17 @@ public class OutboxEventRepository {
                      LIMIT :limit
                     """;
 
+    private static final String CLAIM_PENDING_SQL =
+            "SELECT "
+                    + SELECT_COLUMNS
+                    + """
+                     FROM outbox_event
+                     WHERE published_at IS NULL
+                     ORDER BY created_at
+                     LIMIT :limit
+                     FOR UPDATE SKIP LOCKED
+                    """;
+
     private static final String MARK_PUBLISHED_SQL =
             """
             UPDATE outbox_event
@@ -74,7 +85,8 @@ public class OutboxEventRepository {
     }
 
     /**
-     * Returns pending events, oldest first, capped at {@code limit}.
+     * Returns pending events, oldest first, capped at {@code limit}. Takes no
+     * locks, so this is for inspection and tests rather than for the relay.
      *
      * <p>Oldest first because events for one account must reach the broker in the
      * order they happened; publishing a settlement before the transaction it
@@ -85,6 +97,27 @@ public class OutboxEventRepository {
     public List<OutboxEvent> findPending(int limit) {
         return jdbcClient
                 .sql(SELECT_PENDING_SQL)
+                .param("limit", limit)
+                .query(OutboxEventRepository::mapRow)
+                .list();
+    }
+
+    /**
+     * Claims pending events for publication, locking them for the caller's
+     * transaction.
+     *
+     * <p>{@code FOR UPDATE SKIP LOCKED} is what lets several relay instances run
+     * at once. {@code FOR UPDATE} alone would make the second instance block until
+     * the first commits, turning parallel relays into a queue; {@code SKIP LOCKED}
+     * has it walk past the locked rows and take the next free ones instead. Two
+     * instances therefore publish different events rather than the same event
+     * twice.
+     *
+     * <p>Must be called inside a transaction — the lock lives and dies with it.
+     */
+    public List<OutboxEvent> claimPending(int limit) {
+        return jdbcClient
+                .sql(CLAIM_PENDING_SQL)
                 .param("limit", limit)
                 .query(OutboxEventRepository::mapRow)
                 .list();
