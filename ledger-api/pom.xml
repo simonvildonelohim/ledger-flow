@@ -21,6 +21,10 @@
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-webmvc</artifactId>
     </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-kafka</artifactId>
+    </dependency>
 
     <!-- Persistence: plain JDBC + Flyway. JPA arrives in M2 alongside the
          transaction and outbox repositories. -->
@@ -70,6 +74,11 @@
     <dependency>
       <groupId>org.testcontainers</groupId>
       <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>kafka</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
