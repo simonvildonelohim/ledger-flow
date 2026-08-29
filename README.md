@@ -24,7 +24,7 @@ This section states only what a passing test in CI demonstrates. Nothing is desc
 
 | Guarantee | Backed by | Status |
 | --- | --- | --- |
-| Ledger write and event emission are atomic | `OutboxIntegrationTest` | Not yet implemented |
+| Ledger write and event emission are atomic | `OutboxAtomicityIT` | Passing in CI |
 | Duplicate intake is rejected | `IdempotencyKeyIT` | Passing in CI |
 | Redelivered events leave balances unchanged | `NotifierDeduplicationTest` | Not yet implemented |
 | Events survive a broker outage | `BrokerOutageTest` | Not yet implemented |
