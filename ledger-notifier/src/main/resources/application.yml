@@ -1,6 +1,15 @@
 spring:
   application:
     name: ledger-notifier
+  # A database of its own, not a schema inside ledger-api's. Two services sharing
+  # one database share a deployment: a migration from either can break the other,
+  # and neither can be restored without the other's agreement.
+  datasource:
+    url: jdbc:postgresql://localhost:5432/ledgerflow_notifier
+    username: ${DB_USERNAME:ledgerflow}
+    password: ${DB_PASSWORD:ledgerflow}
+  flyway:
+    enabled: true
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     consumer:
@@ -14,8 +23,8 @@ spring:
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
     listener:
       # Commit after each handled record rather than after a whole poll batch. A
-      # crash mid-batch then redelivers one message instead of the batch, and
-      # deduplication in issue #28 makes that redelivery harmless.
+      # crash mid-batch then redelivers one message instead of the batch, which
+      # deduplication makes harmless.
       ack-mode: record
 
 management:

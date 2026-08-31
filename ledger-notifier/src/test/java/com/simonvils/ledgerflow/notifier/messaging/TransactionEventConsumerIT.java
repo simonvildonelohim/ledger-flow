@@ -3,11 +3,13 @@ package com.simonvils.ledgerflow.notifier.messaging;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -23,7 +25,7 @@ import org.springframework.kafka.core.KafkaTemplate;
  * the same path production code uses instead of a path that only exists under
  * test.
  */
-class TransactionEventConsumerIT extends AbstractKafkaIT {
+class TransactionEventConsumerIT extends AbstractIntegrationIT {
 
     @Autowired private KafkaTemplate<String, String> kafkaTemplate;
 
@@ -39,15 +41,14 @@ class TransactionEventConsumerIT extends AbstractKafkaIT {
                 """
                         .formatted(transactionId);
 
-        kafkaTemplate.send(TransactionEventConsumer.TRANSACTIONS_TOPIC, transactionId.toString(), payload);
+        publish(UUID.randomUUID(), transactionId, payload);
 
         await()
                 .atMost(Duration.ofSeconds(30))
                 .untilAsserted(
                         () -> {
-                            TransactionAcceptedEvent event = capturingHandler.received.peek();
+                            TransactionAcceptedEvent event = findByTransactionId(transactionId);
                             assertThat(event).isNotNull();
-                            assertThat(event.transactionId()).isEqualTo(transactionId);
                             assertThat(event.accountId()).isEqualTo("acct-500");
                             assertThat(event.amountMinor()).isEqualTo(12_500L);
                             assertThat(event.currency()).isEqualTo("CAD");
@@ -69,14 +70,30 @@ class TransactionEventConsumerIT extends AbstractKafkaIT {
                 """
                         .formatted(transactionId);
 
-        kafkaTemplate.send(TransactionEventConsumer.TRANSACTIONS_TOPIC, transactionId.toString(), payload);
+        publish(UUID.randomUUID(), transactionId, payload);
 
         await()
                 .atMost(Duration.ofSeconds(30))
-                .untilAsserted(
-                        () ->
-                                assertThat(capturingHandler.received)
-                                        .anyMatch(event -> event.transactionId().equals(transactionId)));
+                .untilAsserted(() -> assertThat(findByTransactionId(transactionId)).isNotNull());
+    }
+
+    private void publish(UUID eventId, UUID transactionId, String payload) {
+        ProducerRecord<String, String> record =
+                new ProducerRecord<>(
+                        TransactionEventConsumer.TRANSACTIONS_TOPIC, transactionId.toString(), payload);
+        record
+                .headers()
+                .add(
+                        TransactionEventConsumer.EVENT_ID_HEADER,
+                        eventId.toString().getBytes(StandardCharsets.UTF_8));
+        kafkaTemplate.send(record);
+    }
+
+    private TransactionAcceptedEvent findByTransactionId(UUID transactionId) {
+        return capturingHandler.received.stream()
+                .filter(event -> event.transactionId().equals(transactionId))
+                .findFirst()
+                .orElse(null);
     }
 
     @TestConfiguration

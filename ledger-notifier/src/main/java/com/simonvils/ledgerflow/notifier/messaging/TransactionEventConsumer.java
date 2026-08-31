@@ -1,9 +1,11 @@
 package com.simonvils.ledgerflow.notifier.messaging;
 
-import java.util.List;
+import java.nio.charset.StandardCharsets;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
@@ -22,14 +24,17 @@ public class TransactionEventConsumer {
      */
     public static final String TRANSACTIONS_TOPIC = "transactions.v1";
 
+    /** Header carrying the id this consumer deduplicates on. */
+    public static final String EVENT_ID_HEADER = "event-id";
+
     private static final Logger log = LoggerFactory.getLogger(TransactionEventConsumer.class);
 
     private final JsonMapper jsonMapper;
-    private final List<TransactionEventHandler> handlers;
+    private final TransactionEventProcessor processor;
 
-    public TransactionEventConsumer(JsonMapper jsonMapper, List<TransactionEventHandler> handlers) {
+    public TransactionEventConsumer(JsonMapper jsonMapper, TransactionEventProcessor processor) {
         this.jsonMapper = jsonMapper;
-        this.handlers = handlers;
+        this.processor = processor;
     }
 
     /**
@@ -42,26 +47,50 @@ public class TransactionEventConsumer {
      * the listener means a bad message can be dealt with explicitly.
      *
      * <p>Offsets are committed by the container after this method returns
-     * normally, so a message that throws is redelivered rather than skipped. That
-     * is the behaviour we want everywhere except on a payload that will never
-     * parse, which is why the two cases are separated below.
+     * normally, so a message that throws is redelivered rather than skipped.
      *
-     * <p>A malformed message is currently logged and dropped. The production
+     * <p>The header is taken as raw bytes and decoded here. Kafka headers are
+     * byte arrays on the wire, and how they surface as anything else depends on
+     * header-mapper configuration — a dependency worth avoiding for a value this
+     * important.
+     *
+     * <p>A message that cannot be parsed, or that carries no event id, is logged
+     * and dropped. Without the id there is no way to tell a retry from a new
+     * event, so processing it would risk applying an effect twice. The production
      * answer is a dead-letter topic; until that exists this is a known gap rather
      * than a solved problem.
      */
     @KafkaListener(topics = TRANSACTIONS_TOPIC)
-    public void onMessage(String payload) {
+    public void onMessage(
+            String payload,
+            @Header(name = EVENT_ID_HEADER, required = false) byte[] rawEventId) {
+
+        UUID eventId = parseEventId(rawEventId);
+        if (eventId == null) {
+            return;
+        }
+
         TransactionAcceptedEvent event;
         try {
             event = jsonMapper.readValue(payload, TransactionAcceptedEvent.class);
         } catch (JacksonException ex) {
-            log.error("Dropping a message that cannot be parsed as TransactionAccepted", ex);
+            log.error("Dropping message {}: cannot be parsed as TransactionAccepted", eventId, ex);
             return;
         }
 
-        for (TransactionEventHandler handler : handlers) {
-            handler.handle(event);
+        processor.process(eventId, event);
+    }
+
+    private UUID parseEventId(byte[] rawEventId) {
+        if (rawEventId == null) {
+            log.error("Dropping a message with no {} header", EVENT_ID_HEADER);
+            return null;
+        }
+        try {
+            return UUID.fromString(new String(rawEventId, StandardCharsets.UTF_8));
+        } catch (IllegalArgumentException ex) {
+            log.error("Dropping a message whose {} header is not a UUID", EVENT_ID_HEADER, ex);
+            return null;
         }
     }
 }
