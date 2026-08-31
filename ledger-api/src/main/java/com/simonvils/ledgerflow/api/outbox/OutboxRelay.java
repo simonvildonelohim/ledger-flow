@@ -1,9 +1,11 @@
 package com.simonvils.ledgerflow.api.outbox;
 
+import com.simonvils.ledgerflow.api.correlation.CorrelationId;
 import java.time.Instant;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -59,6 +61,12 @@ public class OutboxRelay {
      * consumers would see a settlement arrive before the transaction it settles.
      * The remaining events keep their place and go out on the next pass.
      *
+     * <p>Each event's correlation id is placed in the MDC while it is handled, so
+     * a publication failure is logged under the id of the request that caused it
+     * rather than under nothing at all. This runs on a scheduler thread that
+     * handles many requests' events in turn, which is why the id is set per event
+     * and cleared straight after.
+     *
      * @return how many events were published in this pass
      */
     @Transactional
@@ -70,6 +78,9 @@ public class OutboxRelay {
 
         int published = 0;
         for (OutboxEvent event : claimed) {
+            if (event.correlationId() != null) {
+                MDC.put(CorrelationId.MDC_KEY, event.correlationId());
+            }
             try {
                 publisher.publish(event);
             } catch (Exception ex) {
@@ -81,11 +92,13 @@ public class OutboxRelay {
                         claimed.size(),
                         event.id(),
                         ex);
+                MDC.remove(CorrelationId.MDC_KEY);
                 break;
             }
 
             repository.markPublished(event.id(), Instant.now());
             published++;
+            MDC.remove(CorrelationId.MDC_KEY);
         }
 
         return published;

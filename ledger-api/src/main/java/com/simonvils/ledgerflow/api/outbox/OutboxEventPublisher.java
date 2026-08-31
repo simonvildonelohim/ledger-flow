@@ -1,5 +1,6 @@
 package com.simonvils.ledgerflow.api.outbox;
 
+import com.simonvils.ledgerflow.api.correlation.CorrelationId;
 import com.simonvils.ledgerflow.api.messaging.KafkaTopicConfiguration;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.TimeUnit;
@@ -54,6 +55,10 @@ public class OutboxEventPublisher {
      * and therefore for one account — land on the same partition and keep their
      * order.
      *
+     * <p>Both the event id and the correlation id travel as headers, for the same
+     * reason: they describe this delivery rather than what happened in the ledger,
+     * and a consumer that ignores them should not have to parse around them.
+     *
      * @throws Exception if the broker does not acknowledge in time, or refuses
      */
     public void publish(OutboxEvent event) throws Exception {
@@ -63,10 +68,15 @@ public class OutboxEventPublisher {
                         event.aggregateId().toString(),
                         event.payload());
 
-        record
-                .headers()
-                .add(EVENT_ID_HEADER, event.id().toString().getBytes(StandardCharsets.UTF_8));
+        record.headers().add(EVENT_ID_HEADER, utf8(event.id().toString()));
+        if (event.correlationId() != null) {
+            record.headers().add(CorrelationId.KAFKA_HEADER, utf8(event.correlationId()));
+        }
 
         kafkaTemplate.send(record).get(ACK_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+    }
+
+    private static byte[] utf8(String value) {
+        return value.getBytes(StandardCharsets.UTF_8);
     }
 }

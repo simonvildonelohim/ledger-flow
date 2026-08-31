@@ -1,7 +1,9 @@
 package com.simonvils.ledgerflow.api.transaction;
 
+import com.simonvils.ledgerflow.api.correlation.CorrelationId;
 import com.simonvils.ledgerflow.api.outbox.OutboxEvent;
 import com.simonvils.ledgerflow.api.outbox.OutboxEventRepository;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.json.JsonMapper;
@@ -51,6 +53,12 @@ public class TransactionService {
      * the first submission is what stands — the key identifies the operation, and
      * honouring the second body would make the endpoint non-idempotent by another
      * route.
+     *
+     * <p>The correlation id is copied out of the MDC and into the outbox row.
+     * Reading it here rather than passing it down from the controller keeps the
+     * signature about the transaction; writing it to the row rather than relying
+     * on the thread is what lets the relay, running minutes later on a different
+     * thread, still log under the request that caused the event.
      */
     @Transactional
     public TransactionAcceptance accept(String idempotencyKey, CreateTransactionRequest request) {
@@ -60,7 +68,11 @@ public class TransactionService {
 
         if (transactions.insertIfAbsent(candidate)) {
             outbox.insert(
-                    OutboxEvent.pending(candidate.id(), TRANSACTION_ACCEPTED, serialize(candidate)));
+                    OutboxEvent.pending(
+                            candidate.id(),
+                            TRANSACTION_ACCEPTED,
+                            serialize(candidate),
+                            MDC.get(CorrelationId.MDC_KEY)));
             return TransactionAcceptance.created(candidate);
         }
 

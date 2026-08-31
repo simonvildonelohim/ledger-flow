@@ -13,12 +13,13 @@ import java.util.UUID;
  * turning an old row into a poison message. Keeping it opaque means the relay
  * can publish an event it does not understand.
  *
- * @param id          event identifier, also the deduplication key for consumers
- * @param aggregateId the transaction this event describes
- * @param eventType   what happened, used by consumers to route
- * @param payload     JSON document sent to the broker as-is
- * @param createdAt   when the event was written to the outbox
- * @param publishedAt when the broker acknowledged it, or {@code null} while pending
+ * @param id            event identifier, also the deduplication key for consumers
+ * @param aggregateId   the transaction this event describes
+ * @param eventType     what happened, used by consumers to route
+ * @param payload       JSON document sent to the broker as-is
+ * @param createdAt     when the event was written to the outbox
+ * @param publishedAt   when the broker acknowledged it, or {@code null} while pending
+ * @param correlationId the request that produced it, or {@code null} if unknown
  */
 public record OutboxEvent(
         UUID id,
@@ -26,12 +27,19 @@ public record OutboxEvent(
         String eventType,
         String payload,
         Instant createdAt,
-        Instant publishedAt) {
+        Instant publishedAt,
+        String correlationId) {
+
+    /** Builds an event that has not been published yet, with no correlation id. */
+    public static OutboxEvent pending(UUID aggregateId, String eventType, String payload) {
+        return pending(aggregateId, eventType, payload, null);
+    }
 
     /** Builds an event that has not been published yet. */
-    public static OutboxEvent pending(UUID aggregateId, String eventType, String payload) {
+    public static OutboxEvent pending(
+            UUID aggregateId, String eventType, String payload, String correlationId) {
         return new OutboxEvent(
-                UUID.randomUUID(), aggregateId, eventType, payload, Instant.now(), null);
+                UUID.randomUUID(), aggregateId, eventType, payload, Instant.now(), null, correlationId);
     }
 
     /** Whether this event still needs to reach the broker. */
