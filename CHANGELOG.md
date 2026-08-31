@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-31
+
+Closes the loop. A transaction submitted over HTTP now travels the whole path —
+ledger, outbox, broker, consumer, status — and every guarantee the README claims
+is backed by a test running against real containers in CI.
+
+### Added
+
+- `ledger-notifier` consumes `transactions.v1`, having been an empty module since
+  the first milestone.
+- Deduplication on the event id, recorded in a `processed_event` table. The claim
+  and the effect share one transaction, so an event is never marked handled
+  without its effect having happened.
+- Transaction status projected into ledger-notifier's own database, queryable
+  independently of ledger-api.
+- The outbox event id now travels as a Kafka header, which is what gives the
+  consumer something to deduplicate on.
+- `NotifierDeduplicationIT`, proving the same event delivered twice is handled
+  once, and that a second distinct event about the same transaction still is.
+- ADR-0004, recording where status lives and what that choice costs.
+
+### Changed
+
+- `ledger-notifier` now owns a database. It no longer shares ledger-api's.
+
+### Known gaps
+
+- The `status` column in ledger-api's `transactions` table stays `PENDING`
+  forever. Status is owned by ledger-notifier's projection — see ADR-0004.
+- Nothing exercises both services in one run, so they agree on the event payload
+  by inspection rather than by test.
+- `processed_event` grows without bound, like the outbox before it.
+- A message that cannot be parsed, or that carries no event id, is logged and
+  dropped. A dead-letter topic is the production answer.
+
 ## [0.1.0] - 2026-08-29
 
 First milestone with the transactional outbox working end to end: a transaction
@@ -46,5 +81,6 @@ which one exists without the other.
   to run it, and `.gitignore` excluded `maven-wrapper.properties`, which the
   wrapper needs.
 
-[Unreleased]: https://github.com/simonvildonelohim/ledger-flow/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/simonvildonelohim/ledger-flow/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/simonvildonelohim/ledger-flow/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/simonvildonelohim/ledger-flow/releases/tag/v0.1.0
