@@ -1,0 +1,25 @@
+spring:
+  application:
+    name: ledger-notifier
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      # The group id is what makes the offset durable: restart this service and it
+      # resumes where it stopped rather than replaying from the beginning.
+      group-id: ledger-notifier
+      # Only applies the first time this group is seen. From then on the stored
+      # offset wins, so an existing deployment is not affected by this setting.
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    listener:
+      # Commit after each handled record rather than after a whole poll batch. A
+      # crash mid-batch then redelivers one message instead of the batch, and
+      # deduplication in issue #28 makes that redelivery harmless.
+      ack-mode: record
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
