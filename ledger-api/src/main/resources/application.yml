@@ -24,3 +24,21 @@ management:
 
 server:
   port: 8080
+
+---
+# Everything that runs in a container. Logs go to stdout as one JSON object per
+# line, because that is where a log collector reads them and a human does not.
+#
+# ECS rather than a hand-rolled shape: it is a published schema, so a collector
+# knows what log.level and service.name mean without being told. Every MDC entry
+# is added to the object automatically, which is what will make the correlation
+# id in issue #35 queryable rather than buried in a message string.
+spring:
+  config:
+    activate:
+      on-profile: containers
+
+logging:
+  structured:
+    format:
+      console: ecs

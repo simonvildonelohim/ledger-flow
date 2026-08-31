@@ -32,3 +32,16 @@ management:
     web:
       exposure:
         include: health, info
+
+---
+# See the equivalent block in ledger-api. Both services log the same way, so one
+# query works across both — which is the whole point of the correlation id.
+spring:
+  config:
+    activate:
+      on-profile: containers
+
+logging:
+  structured:
+    format:
+      console: ecs
