@@ -1,7 +1,9 @@
 package com.simonvils.ledgerflow.api.outbox;
 
 import com.simonvils.ledgerflow.api.messaging.KafkaTopicConfiguration;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.TimeUnit;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
@@ -13,6 +15,16 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class OutboxEventPublisher {
+
+    /**
+     * Header carrying the outbox event id, which consumers deduplicate on.
+     *
+     * <p>A header rather than a payload field. The id is metadata about this
+     * delivery, not something that happened in the ledger: a consumer that does
+     * not deduplicate has no reason to see it, and putting it in the body would
+     * change a published contract for a purely transport-level need.
+     */
+    public static final String EVENT_ID_HEADER = "event-id";
 
     /**
      * How long to wait for an acknowledgement before treating the send as failed.
@@ -45,11 +57,16 @@ public class OutboxEventPublisher {
      * @throws Exception if the broker does not acknowledge in time, or refuses
      */
     public void publish(OutboxEvent event) throws Exception {
-        kafkaTemplate
-                .send(
+        ProducerRecord<String, String> record =
+                new ProducerRecord<>(
                         KafkaTopicConfiguration.TRANSACTIONS_TOPIC,
                         event.aggregateId().toString(),
-                        event.payload())
-                .get(ACK_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                        event.payload());
+
+        record
+                .headers()
+                .add(EVENT_ID_HEADER, event.id().toString().getBytes(StandardCharsets.UTF_8));
+
+        kafkaTemplate.send(record).get(ACK_TIMEOUT_SECONDS, TimeUnit.SECONDS);
     }
 }
