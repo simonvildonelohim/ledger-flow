@@ -26,7 +26,7 @@ This table states only what a passing test in CI demonstrates. Nothing is descri
 | --- | --- | --- |
 | Ledger write and event emission are atomic | `OutboxAtomicityIT` | Passing in CI |
 | Duplicate intake is rejected | `IdempotencyKeyIT` | Passing in CI |
-| Redelivered events leave balances unchanged | `NotifierDeduplicationIT` | Not yet implemented |
+| Redelivered events leave balances unchanged | `NotifierDeduplicationIT` | Passing in CI |
 | Events survive a broker outage | `BrokerOutageIT` | Passing in CI |
 
 ## Architecture
@@ -137,6 +137,7 @@ Significant decisions are documented rather than remembered.
 - [ADR-0001](docs/adr/0001-record-architecture-decisions.md) — Record architecture decisions
 - [ADR-0002](docs/adr/0002-transactional-outbox-for-event-publication.md) — Use a transactional outbox for event publication
 - [ADR-0003](docs/adr/0003-pin-testcontainers-1x.md) — Pin Testcontainers to the 1.x line
+- [ADR-0004](docs/adr/0004-notifier-owns-the-status-projection.md) — ledger-notifier owns the status projection
 
 ## Licence
 
