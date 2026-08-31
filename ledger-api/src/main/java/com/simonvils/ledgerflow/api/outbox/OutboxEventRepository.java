@@ -20,13 +20,14 @@ public class OutboxEventRepository {
     private static final String INSERT_SQL =
             """
             INSERT INTO outbox_event
-                (id, aggregate_id, event_type, payload, created_at, published_at)
+                (id, aggregate_id, event_type, payload, created_at, published_at, correlation_id)
             VALUES
-                (:id, :aggregateId, :eventType, CAST(:payload AS jsonb), :createdAt, :publishedAt)
+                (:id, :aggregateId, :eventType, CAST(:payload AS jsonb), :createdAt, :publishedAt,
+                 :correlationId)
             """;
 
     private static final String SELECT_COLUMNS =
-            "id, aggregate_id, event_type, payload, created_at, published_at";
+            "id, aggregate_id, event_type, payload, created_at, published_at, correlation_id";
 
     private static final String SELECT_PENDING_SQL =
             "SELECT "
@@ -81,6 +82,7 @@ public class OutboxEventRepository {
                 .param("payload", event.payload())
                 .param("createdAt", toOffsetDateTime(event.createdAt()))
                 .param("publishedAt", toOffsetDateTime(event.publishedAt()))
+                .param("correlationId", event.correlationId())
                 .update();
     }
 
@@ -158,6 +160,7 @@ public class OutboxEventRepository {
                 rs.getString("event_type"),
                 rs.getString("payload"),
                 rs.getObject("created_at", OffsetDateTime.class).toInstant(),
-                publishedAt == null ? null : publishedAt.toInstant());
+                publishedAt == null ? null : publishedAt.toInstant(),
+                rs.getString("correlation_id"));
     }
 }

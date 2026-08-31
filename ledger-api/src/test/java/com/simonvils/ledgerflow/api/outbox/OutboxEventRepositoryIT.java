@@ -49,6 +49,30 @@ class OutboxEventRepositoryIT extends AbstractPostgresIT {
     }
 
     @Test
+    void storesTheCorrelationIdOfTheRequestThatProducedTheEvent() {
+        UUID aggregateId = someTransaction();
+        String correlationId = "req-" + UUID.randomUUID();
+        OutboxEvent event =
+                OutboxEvent.pending(aggregateId, "TransactionAccepted", "{}", correlationId);
+
+        outbox.insert(event);
+
+        // The relay publishes minutes later on a scheduler thread. Without the
+        // column, the chain from request to publication would break here.
+        assertThat(readBack(event.id()).correlationId()).isEqualTo(correlationId);
+    }
+
+    @Test
+    void acceptsAnEventWithNoCorrelationId() {
+        UUID aggregateId = someTransaction();
+        OutboxEvent event = OutboxEvent.pending(aggregateId, "TransactionAccepted", "{}");
+
+        outbox.insert(event);
+
+        assertThat(readBack(event.id()).correlationId()).isNull();
+    }
+
+    @Test
     void preservesThePayloadAsJson() {
         UUID aggregateId = someTransaction();
         String payload =
@@ -141,7 +165,7 @@ class OutboxEventRepositoryIT extends AbstractPostgresIT {
 
     private OutboxEvent eventAt(UUID aggregateId, Instant createdAt) {
         return new OutboxEvent(
-                UUID.randomUUID(), aggregateId, "TransactionAccepted", "{}", createdAt, null);
+                UUID.randomUUID(), aggregateId, "TransactionAccepted", "{}", createdAt, null, null);
     }
 
     /** The outbox has a foreign key to transactions, so a parent row must exist. */
@@ -156,7 +180,8 @@ class OutboxEventRepositoryIT extends AbstractPostgresIT {
         return jdbcClient
                 .sql(
                         """
-                        SELECT id, aggregate_id, event_type, payload, created_at, published_at
+                        SELECT id, aggregate_id, event_type, payload, created_at, published_at,
+                               correlation_id
                         FROM outbox_event
                         WHERE id = :id
                         """)
@@ -171,7 +196,8 @@ class OutboxEventRepositoryIT extends AbstractPostgresIT {
                                     rs.getString("event_type"),
                                     rs.getString("payload"),
                                     rs.getObject("created_at", OffsetDateTime.class).toInstant(),
-                                    publishedAt == null ? null : publishedAt.toInstant());
+                                    publishedAt == null ? null : publishedAt.toInstant(),
+                                    rs.getString("correlation_id"));
                         })
                 .single();
     }
