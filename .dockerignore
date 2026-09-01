@@ -1,0 +1,10 @@
+# Build output. Copying it in would ship a jar built on the host into an image
+# that is supposed to build its own, and the two can silently differ.
+**/target/
+
+.git/
+.github/
+.idea/
+.vscode/
+docs/
+*.md
