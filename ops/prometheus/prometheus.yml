@@ -1,0 +1,22 @@
+# Scraped every 5s rather than the usual 15s. This is a stack where someone
+# breaks the broker on purpose and watches what happens; a 15s gap turns the
+# recovery into a step function instead of a curve.
+global:
+  # 15s rather than 5s: on a slow disk the services take several seconds to
+  # render their metrics, and a scrape that cannot finish inside the interval
+  # is a scrape that always times out.
+  scrape_interval: 15s
+  scrape_timeout: 10s
+
+scrape_configs:
+  # Targets are Docker service names, not localhost: Prometheus resolves them
+  # on the compose network, from inside its own container.
+  - job_name: ledger-api
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["ledger-api:8080"]
+
+  - job_name: ledger-notifier
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["ledger-notifier:8081"]
