@@ -24,13 +24,28 @@
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-actuator</artifactId>
     </dependency>
+    <!-- Actuator collects the metrics; this renders them in the format
+         Prometheus scrapes. Managed by the Spring Boot BOM, so no version
+         here. -->
+    <dependency>
+      <groupId>io.micrometer</groupId>
+      <artifactId>micrometer-registry-prometheus</artifactId>
+    </dependency>
 
     <!-- Consuming the transactions topic -->
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-kafka</artifactId>
     </dependency>
-
+  
+    <!-- The notifier serves no API; this is here so Actuator has a port to
+         expose /actuator/prometheus on. A consumer that cannot be scraped is
+         a consumer whose lag nobody can see. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-webmvc</artifactId>
+    </dependency>
+    
     <!-- Jackson, for turning an event payload into a record. Not pulled in by
          spring-boot-starter on its own: this service has no web layer. -->
     <dependency>
