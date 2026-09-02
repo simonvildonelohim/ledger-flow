@@ -139,6 +139,11 @@ services:
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
       GF_AUTH_DISABLE_LOGIN_FORM: "true"
+    volumes:
+      # Provisioned from files rather than clicked into a running Grafana: the
+      # dashboard survives `docker compose down -v` and shows up in diffs.
+      - ./ops/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./ops/grafana/dashboards:/var/dashboards:ro
     ports:
       - "3000:3000"
     depends_on:

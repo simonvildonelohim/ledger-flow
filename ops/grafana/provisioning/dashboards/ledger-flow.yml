@@ -1,0 +1,13 @@
+# Tells Grafana to load every dashboard JSON found under /var/dashboards.
+apiVersion: 1
+
+providers:
+  - name: ledger-flow
+    type: file
+    # Edits made in the UI are discarded on restart. That is deliberate: the
+    # file in the repository is the dashboard, and a change worth keeping is a
+    # change worth reviewing in a pull request.
+    allowUiUpdates: false
+    options:
+      path: /var/dashboards
+      foldersFromFilesStructure: false

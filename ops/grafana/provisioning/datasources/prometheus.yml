@@ -1,0 +1,17 @@
+# Provisioned rather than added through the UI. A datasource clicked into a
+# running Grafana lives in its volume and disappears with `docker compose
+# down -v`; this file is in the repository and cannot.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    # Service name on the compose network, not localhost: Grafana queries this
+    # from inside its own container.
+    url: http://prometheus:9090
+    isDefault: true
+    # Fixed so the dashboard can reference it by uid instead of by name, which
+    # would break the moment someone renamed it.
+    uid: ledgerflow-prometheus
+    editable: false
