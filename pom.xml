@@ -95,6 +95,14 @@
               </goals>
             </execution>
           </executions>
+          <configuration>
+            <!-- Failsafe defaults to running against the packaged artifact.
+               spring-boot:repackage rewrites that jar into a fat jar with the
+               application classes under BOOT-INF/classes, where the test
+               classloader cannot see them. Point it back at the compiled
+               classes; the fat jar is a packaging concern, not a test one. -->
+            <classesDirectory>${project.build.outputDirectory}</classesDirectory>
+            </configuration>
         </plugin>
         <plugin>
           <groupId>org.springframework.boot</groupId>
