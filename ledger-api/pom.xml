@@ -54,6 +54,13 @@
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-actuator</artifactId>
     </dependency>
+    <!-- Actuator collects the metrics; this renders them in the format
+         Prometheus scrapes. Managed by the Spring Boot BOM, so no version
+         here. -->
+    <dependency>
+      <groupId>io.micrometer</groupId>
+      <artifactId>micrometer-registry-prometheus</artifactId>
+    </dependency>
 
     <!-- Test -->
     <dependency>
