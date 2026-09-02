@@ -57,6 +57,9 @@ public class OutboxEventRepository {
             WHERE id = :id AND published_at IS NULL
             """;
 
+    private static final String COUNT_PENDING_SQL =
+            "SELECT count(*) FROM outbox_event WHERE published_at IS NULL";
+
     private final JdbcClient jdbcClient;
 
     public OutboxEventRepository(JdbcClient jdbcClient) {
@@ -145,6 +148,17 @@ public class OutboxEventRepository {
         return rowsUpdated == 1;
     }
 
+    /**
+     * Counts events still waiting to be published.
+     *
+     * <p>Read by the metrics gauge rather than by the relay. A count over the
+     * partial index on unpublished rows stays cheap however much published
+     * history accumulates, which is what makes it safe to run on every scrape.
+     */
+    public long countPending() {
+        return jdbcClient.sql(COUNT_PENDING_SQL).query(Long.class).single();
+    }
+    
     private static OffsetDateTime toOffsetDateTime(Instant instant) {
         // pgjdbc binds OffsetDateTime to TIMESTAMPTZ directly; Instant is not a
         // supported parameter type.

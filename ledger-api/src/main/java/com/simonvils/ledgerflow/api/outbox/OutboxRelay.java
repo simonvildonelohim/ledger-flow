@@ -4,6 +4,9 @@ import com.simonvils.ledgerflow.api.correlation.CorrelationId;
 import java.time.Instant;
 import java.util.List;
 import org.slf4j.Logger;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
+import java.time.Duration;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
@@ -36,10 +39,20 @@ public class OutboxRelay {
 
     private final OutboxEventRepository repository;
     private final OutboxEventPublisher publisher;
+    private final Timer publishLatency;
 
-    public OutboxRelay(OutboxEventRepository repository, OutboxEventPublisher publisher) {
+    public OutboxRelay(
+            OutboxEventRepository repository,
+            OutboxEventPublisher publisher,
+            MeterRegistry registry) {
         this.repository = repository;
         this.publisher = publisher;
+        this.publishLatency =
+                Timer.builder("ledger.outbox.publish.latency")
+                        .description(
+                                "Time from an event being written to it being acknowledged by the broker")
+                        .publishPercentileHistogram()
+                        .register(registry);
     }
 
     /**
@@ -96,7 +109,12 @@ public class OutboxRelay {
                 break;
             }
 
-            repository.markPublished(event.id(), Instant.now());
+            Instant publishedAt = Instant.now();
+            repository.markPublished(event.id(), publishedAt);
+            // Measured from creation, not from the start of this pass: what
+            // matters is how long the event waited, and most of that wait is
+            // the scheduler interval before the relay even looked.
+            publishLatency.record(Duration.between(event.createdAt(), publishedAt));
             log.info("Relayed outbox event id={} to the broker", event.id());
             published++;
             MDC.remove(CorrelationId.MDC_KEY);

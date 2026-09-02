@@ -118,3 +118,28 @@ services:
         condition: service_healthy
       broker:
         condition: service_healthy
+    
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      # Six hours is plenty: this is a stack that gets torn down between
+      # sessions, not a monitoring system anyone reports from.
+      - --storage.tsdb.retention.time=6h
+    volumes:
+      - ./ops/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:11.5.1
+    environment:
+      # Anonymous admin access. The alternative on a local stack is a password
+      # that ends up committed to a public repository.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
