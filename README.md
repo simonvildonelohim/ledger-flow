@@ -83,6 +83,48 @@ header. Without either step the trail stops at the HTTP response.
 
 On Windows, replace `grep` with `Select-String`.
 
+
+## Watching the pipeline
+
+`docker compose up` also brings up Prometheus and Grafana. The dashboard is at
+**http://localhost:3000/d/ledger-flow-outbox** — no login, nothing to
+configure. Both the datasource and the dashboard are provisioned from files
+under `ops/grafana`, so they survive `docker compose down -v` and show up in
+diffs like any other code.
+
+Three numbers describe the health of the outbox:
+
+| Metric | What it answers |
+|---|---|
+| `ledger_outbox_pending_events` | How many events are written but not yet published |
+| `ledger_outbox_publish_latency_seconds` | How long an event waited before the broker acknowledged it |
+| `kafka_consumer_fetch_manager_records_lag` | How far the projection trails the ledger |
+
+**Outbox depth is the one that matters.** Everything else about this system can
+look healthy while events pile up unpublished: the API keeps returning `201`,
+the database keeps committing, and nothing logs an error — because a relay that
+cannot reach the broker is behaving exactly as designed. Depth is the only
+signal that the queue is not draining.
+
+A spike that returns to zero is the outbox absorbing a broker outage, which is
+what it exists to do. A step that stays up is an incident.
+
+Publish latency is dominated by the scheduler interval rather than by the
+broker: an event written just after a pass waits a full cycle before the relay
+looks at the table again. That gap is the price of polling, and the reason CDC
+exists.
+
+Raw metrics, if you want them without Grafana:
+
+```
+curl http://localhost:8080/actuator/prometheus   # ledger-api
+curl http://localhost:8081/actuator/prometheus   # ledger-notifier
+```
+
+Prometheus itself is at http://localhost:9090; its scrape targets are at
+http://localhost:9090/targets.
+
+
 ## Architecture
 
 ```mermaid
