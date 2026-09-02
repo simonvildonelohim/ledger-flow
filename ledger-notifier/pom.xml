@@ -97,6 +97,17 @@
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <goals>
+              <!-- Without this, `package` produces a plain jar with no
+                   Main-Class, and `java -jar` fails with "no main manifest
+                   attribute". Nothing caught it before because we always ran
+                   through spring-boot:run, never the jar itself. -->
+              <goal>repackage</goal>
+            </goals>
+          </execution>
+        </executions>
       </plugin>
       <!-- Without this, nothing named *IT runs in this module. -->
       <plugin>

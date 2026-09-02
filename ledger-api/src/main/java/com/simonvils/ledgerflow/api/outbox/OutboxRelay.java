@@ -97,6 +97,7 @@ public class OutboxRelay {
             }
 
             repository.markPublished(event.id(), Instant.now());
+            log.info("Relayed outbox event id={} to the broker", event.id());
             published++;
             MDC.remove(CorrelationId.MDC_KEY);
         }

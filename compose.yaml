@@ -1,0 +1,120 @@
+# The whole system on one machine: two databases, a broker, two services.
+#
+# Redpanda rather than Apache Kafka here — same protocol, no JVM, a fraction of
+# the memory. See docs/adr/0005-redpanda-in-the-local-stack.md. Tests still run
+# against Apache Kafka.
+#
+#   docker compose up --build
+#
+# Then post a transaction and watch one correlation id cross both services:
+#
+#   curl -i -X POST http://localhost:8080/transactions \
+#     -H 'Content-Type: application/json' \
+#     -H 'Idempotency-Key: demo-001' \
+#     -H 'X-Correlation-Id: demo-trace-1' \
+#     -d '{"accountId":"acct-001","amountMinor":12500,"currency":"CAD"}'
+
+name: ledger-flow
+
+services:
+
+  ledger-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ledgerflow
+      POSTGRES_PASSWORD: ledgerflow
+      POSTGRES_DB: ledgerflow
+    ports:
+      - "5432:5432"
+    healthcheck:
+      # Named explicitly: pg_isready succeeds against the default database before
+      # the one declared above necessarily exists, which is exactly the window a
+      # dependent service would start in and fail.
+      test: ["CMD-SHELL", "pg_isready -U ledgerflow -d ledgerflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      # First start runs initdb, which writes hundreds of files. On a mechanical
+      # disk that takes over a minute; failures during this window do not count
+      # against retries.
+      start_period: 180s
+
+  notifier-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ledgerflow
+      POSTGRES_PASSWORD: ledgerflow
+      POSTGRES_DB: ledgerflow_notifier
+    # A different host port, because both containers listen on 5432 internally
+    # and only one can own 5432 on the host.
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ledgerflow -d ledgerflow_notifier"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      # First start runs initdb, which writes hundreds of files. On a mechanical
+      # disk that takes over a minute; failures during this window do not count
+      # against retries.
+      start_period: 180s
+
+  broker:
+    image: redpandadata/redpanda:v24.2.7
+    command:
+      - redpanda
+      - start
+      - --mode=dev-container
+      - --smp=1
+      - --memory=512M
+      - --set redpanda.auto_create_topics_enabled=false
+      - --kafka-addr=INTERNAL://0.0.0.0:9092,EXTERNAL://0.0.0.0:19092
+      # Two advertised addresses because a client inside the network reaches the
+      # broker as "broker" while one on the host reaches it as localhost, and a
+      # broker advertises whichever address it is told to. Getting this wrong
+      # produces a connection that succeeds and then times out on every fetch.
+      - --advertise-kafka-addr=INTERNAL://broker:9092,EXTERNAL://localhost:19092
+    ports:
+      - "19092:19092"
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy:.*true'"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 120s
+
+  ledger-api:
+    build:
+      context: .
+      dockerfile: ledger-api/Dockerfile
+    environment:
+      SPRING_PROFILES_ACTIVE: containers
+      SPRING_DATASOURCE_URL: jdbc:postgresql://ledger-db:5432/ledgerflow
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: broker:9092
+    ports:
+      - "8080:8080"
+    depends_on:
+      # service_healthy, not just service_started. Flyway runs at startup and a
+      # database that is merely listening is not necessarily accepting queries;
+      # the service would crash-loop until it happened to win the race.
+      ledger-db:
+        condition: service_healthy
+      broker:
+        condition: service_healthy
+
+  ledger-notifier:
+    build:
+      context: .
+      dockerfile: ledger-notifier/Dockerfile
+    environment:
+      SPRING_PROFILES_ACTIVE: containers
+      SPRING_DATASOURCE_URL: jdbc:postgresql://notifier-db:5432/ledgerflow_notifier
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: broker:9092
+      SERVER_PORT: 8081
+    ports:
+      - "8081:8081"
+    depends_on:
+      notifier-db:
+        condition: service_healthy
+      broker:
+        condition: service_healthy

@@ -3,6 +3,8 @@ package com.simonvils.ledgerflow.api.transaction;
 import com.simonvils.ledgerflow.api.correlation.CorrelationId;
 import com.simonvils.ledgerflow.api.outbox.OutboxEvent;
 import com.simonvils.ledgerflow.api.outbox.OutboxEventRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,6 +15,7 @@ import tools.jackson.databind.json.JsonMapper;
 public class TransactionService {
 
     /** Event type published when a transaction enters the ledger. */
+    private static final Logger log = LoggerFactory.getLogger(TransactionService.class);
     public static final String TRANSACTION_ACCEPTED = "TransactionAccepted";
 
     private final TransactionRepository transactions;
@@ -73,6 +76,12 @@ public class TransactionService {
                             TRANSACTION_ACCEPTED,
                             serialize(candidate),
                             MDC.get(CorrelationId.MDC_KEY)));
+                log.info(
+                    "Accepted transaction id={} accountId={} amountMinor={} currency={}",
+                    candidate.id(),
+                    request.accountId(),
+                    request.amountMinor(),
+                    request.currency());
             return TransactionAcceptance.created(candidate);
         }
 
