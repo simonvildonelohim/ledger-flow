@@ -29,6 +29,60 @@ This table states only what a passing test in CI demonstrates. Nothing is descri
 | Events survive a broker outage | `BrokerOutageIT` | Passing in CI |
 | Redelivered events are handled once | `NotifierDeduplicationIT` | Passing in CI |
 
+## Tracing a transaction
+
+The whole stack runs locally:
+
+```
+docker compose up
+```
+
+This brings up both databases, the broker, and both services. First start
+takes a few minutes while the images build and Postgres initialises.
+
+Send a transaction, supplying your own correlation id:
+
+```
+curl -i -X POST http://localhost:8080/transactions \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: demo-001" \
+  -H "X-Correlation-Id: demo-trace-1" \
+  -d '{"accountId":"acct-001","amountMinor":12500,"currency":"CAD"}'
+```
+
+The response comes back before the event reaches the broker — the caller
+does not wait on Kafka:
+
+```
+HTTP/1.1 201
+X-Correlation-Id: demo-trace-1
+
+{"id":"a9bc6623-...","accountId":"acct-001","amountMinor":12500,
+ "currency":"CAD","status":"PENDING","createdAt":"..."}
+```
+
+One grep then follows that transaction across both services:
+
+```
+docker compose logs | grep demo-trace-1
+```
+
+```
+ledger-api       Accepted transaction id=a9bc6623-... accountId=acct-001 amountMinor=12500 currency=CAD
+ledger-api       Relayed outbox event id=e7b5334c-... to the broker
+ledger-notifier  Consumed TransactionAccepted transactionId=a9bc6623-... accountId=acct-001 ...
+```
+
+Accepted, relayed, consumed — three log lines, two services, one id.
+
+The id survives two hops it has no business surviving. The MDC is a
+thread-local, so it is long gone by the time the relay runs on a scheduler
+thread; it survives because it is written into the outbox row alongside the
+event. It reaches the consumer because the publisher puts it on a Kafka
+header. Without either step the trail stops at the HTTP response.
+
+On Windows, replace `grep` with `Select-String`.
+
 ## Architecture
 
 ```mermaid
